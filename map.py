@@ -1,15 +1,14 @@
-import sqlite3
 import sys
 import time
+import sqlite3
 import pprint
-from twython import Twython, TwythonError, TwythonRateLimitError
-from urllib.error import URLError
-from http.client import BadStatusLine
+import csv
 from operator import itemgetter
 from math import log1p as ln
 
 from keys import *
 from testusers import *
+from twitterconnect import *
 
 class DBConnect:
     def __init__(self, db):
@@ -25,59 +24,6 @@ class DBConnect:
         for row in values:
             self.sql("INSERT INTO "+table+" VALUES ("+','.join(list(map(str,row)))+")")
         self.conn.commit()
-
-class TwitterConnect(Twython):
-    def partition(self, uids, n):
-        parts = []
-        while (len(uids) > n):
-            parts.append(uids[0:n])
-            del uids[0:n]
-        parts.append(uids)
-        return parts
-    def parse_user(self, json):
-        uid = str(json['id'])
-        screen_name = "'"+str(json['screen_name'])+"'"
-        name = "'"+str(json['name']).replace("'", "''")+"'"
-        description = "'"+str(json['description']).replace("'", "''")+"'"
-        location = "'"+str(json['location']).replace("'", "''")+"'"
-        url = (" '"+ str(json['url']).replace("'", "''") +"' ").replace("'None'", "NULL")
-        friends_count = str(json['friends_count'])
-        followers_count = str(json['followers_count'])
-        statuses_count = str(json['statuses_count'])
-        lang = "'"+str(json['lang'])+"'"
-        geo_enabled = "'"+str(json['geo_enabled'])+"'"
-        twitter_date_created = "'"+str(json['created_at'])+"'"
-        date_created = "DATETIME(CURRENT_TIMESTAMP, 'localtime')"
-        date_last_modified = "DATETIME(CURRENT_TIMESTAMP, 'localtime')"
-        id_str = "'"+str(json['id_str'])+"'"
-        date_sync = "NULL"
-        parse_array = [uid, screen_name, name, description, location, url, friends_count, followers_count, statuses_count, lang, geo_enabled, twitter_date_created, date_created, date_last_modified, id_str, date_sync]
-        return parse_array
-    def parse_follower(self, uid, fols):
-        fols_parse = []
-        for fol in fols:
-            fols_parse.append([uid, fol])
-        return fols_parse
-    def helper_part(self, uids, CallFn, ParseFn, n=100, file='collect.tmp'):
-        uids = self.partition(uids,n)
-        tbl = []
-        for batch in uids:
-            call = CallFn(batch)
-            tbl.extend(list(map(ParseFn, call)))
-        return tbl
-    def user_demo_part(self, uids):
-        call = self.lookup_user(user_id = ','.join(map(str,uids)))
-        return call
-    def user_demo(self, uids):
-        return self.helper_part(uids, self.user_demo_part, self.parse_user)
-    def followers (self, uid):
-        cursor = -1
-        followers = []
-        while (cursor != 0):
-            call = self.get_followers_ids(user_id = uid, cursor = cursor)
-            followers.extend(call['ids'])
-            cursor = call['next_cursor']
-        return followers
 
 db = DBConnect('twitter.db')
 tw = TwitterConnect(APP_KEY, APP_SECRET, OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
@@ -99,10 +45,22 @@ class Mappr:
         parse_fols = tw.parse_follower(uid, fols)
         self.db.bulkload('follower', parse_fols)
         self.fols.extend(fols)
+    def bulk_followers(self, uids):
+        uids = self.trim_users_size(uids)
+        n_uids = len(uids)
+        for i in range(n_uids):
+            print ("Pulling followers for follower %i of %i (%i%% complete)..." % (i+1, n_uids, ((100*(i+1)//n_uids)))
+            self.get_followers(uids[i])
     def load_followers(self, uid):
         rawlist = self.db.query("SELECT follower_id FROM follower WHERE user_id = "+str(uid))
         parselist = []
         for item in rawlist:
+            parselist.append(item[0])
+        return parselist
+    def trim_users_size(self, uids):
+        raw_trim = self.db.query("SELECT id FROM user WHERE followers_count BETWEEN 100 AND 10000 AND id IN ("+','.join(list(map(str,uids)))+")")
+        parselist = []
+        for item in raw_trim:
             parselist.append(item[0])
         return parselist
     def trunc_exist_users(self, uids):
@@ -116,10 +74,13 @@ class Mappr:
         q = self.db.query("""
 SELECT id, screen_name, name, description, location, followers_count
 FROM user
-WHERE id IN ("""+','.join(list(map(str,uids)))+") ORDER BY "+order+" LIMIT 10")
-        return pprint.pprint(q)
+WHERE id IN ("""+','.join(list(map(str,uids)))+") ORDER BY "+order)
+        return q
+    def save_query(self, q, file):
+        with open(file, 'w', encoding='utf-16', newline='') as csvfile:
+            writer = csv.writer(csvfile, delimiter='|', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            for row in q:
+                writer.writerow(row)
+
         
 mappy = Mappr(andrew)
-
-
-
