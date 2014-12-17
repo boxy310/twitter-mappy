@@ -25,4 +25,8 @@ date_sync SHORTDATETIME
 ) """)
 
 cursor.execute("CREATE TABLE follower (user_id INT, follower_id INT)")
+
+cursor.execute("CREATE INDEX id ON user(id)")
+cursor.execute("CREATE INDEX user_id ON follower(user_id)")
+cursor.execute("CREATE INDEX follower_id ON follower(follower_id)")
 conn.commit()
