@@ -47,9 +47,12 @@ class Mappr:
         self.fols.extend(fols)
     def bulk_followers(self, uids):
         uids = self.trim_users_size(uids)
+        uids = self.trunc_exist_fols(uids)
+        # TODO: eliminate users whose tweets are protected
+        uids.remove(467349700)
         n_uids = len(uids)
         for i in range(n_uids):
-            print ("Pulling followers for follower %i of %i (%i%% complete)..." % (i+1, n_uids, ((100*(i+1)//n_uids)))
+            print ("Pulling followers for %i of %i users (%3.1f%% complete)..." % (i+1, n_uids, ((100*(i+1)/n_uids))))
             self.get_followers(uids[i])
     def load_followers(self, uid):
         rawlist = self.db.query("SELECT follower_id FROM follower WHERE user_id = "+str(uid))
@@ -63,6 +66,13 @@ class Mappr:
         for item in raw_trim:
             parselist.append(item[0])
         return parselist
+    def trunc_exist_fols(self, uids):
+        def trunc_helper(x):
+            return x[0]
+        exist_fols = self.db.query("SELECT DISTINCT user_id FROM follower WHERE user_id IN ("+','.join(list(map(str,uids)))+")")
+        exist_fols = list(map(trunc_helper, exist_fols))
+        new_fols = [x for x in uids if x not in exist_fols]
+        return new_fols        
     def trunc_exist_users(self, uids):
         def trunc_helper(x):
             return x[0]
