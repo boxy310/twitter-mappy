@@ -23,10 +23,10 @@ class TwitterConnect(Twython):
         
             if e.error_code == 401:
                 print ('Encountered 401 Error (Not Authorized)', file=sys.stderr)
-                return None
+                return None #return empty JSON doc
             elif e.error_code == 404:
                 print ('Encountered 404 Error (Not Found)', file=sys.stderr)
-                return None
+                return None #return empty JSON doc
             elif e.error_code == 429: 
                 print ('Encountered 429 Error (Rate Limit Exceeded)', file=sys.stderr)
                 if sleep_when_rate_limited:
